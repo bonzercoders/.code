@@ -921,6 +921,7 @@
  .character-editor {
   min-height: 0;
   height: 100%;
+  width: 100%;
   border: 1px solid #191d20;
   border-radius: 16px;
   background: #0e1011;
