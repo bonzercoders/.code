@@ -458,9 +458,34 @@
 }
 
 .chat-editor__input-wrap {
+  position: relative;
   flex: 1;
   min-height: 92px;
   padding: 15px 16px 10px;
+}
+
+.chat-editor__status {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: #7a8a9e;
+  pointer-events: none;
+}
+
+.chat-editor__status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #555;
+}
+
+.chat-editor__status-dot.is-connected {
+  background: #34d399;
+  box-shadow: 0 0 4px rgba(52, 211, 153, 0.5);
 }
 
 .chat-editor__input {

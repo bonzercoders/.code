@@ -3,10 +3,18 @@ import { Plus } from "lucide-react"
 
 import micIcon from "@/assets/mic.png"
 import { Button } from "@/components/ui/button"
+import { useVoiceSocket } from "@/lib/useVoiceSocket"
 
 const MENU_ITEMS = ["File upload", "New chat"]
 
+const STATUS_LABEL: Record<string, string> = {
+  connected: "Connected",
+  connecting: "Connecting...",
+  disconnected: "Disconnected",
+}
+
 export function ChatEditor() {
+  const { status } = useVoiceSocket()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
 
@@ -38,6 +46,12 @@ export function ChatEditor() {
   return (
     <div aria-label="Chat editor" className="chat-editor" role="group">
       <div className="chat-editor__input-wrap">
+        <div className="chat-editor__status">
+          <span className="chat-editor__status-label">{STATUS_LABEL[status]}</span>
+          <span
+            className={`chat-editor__status-dot${status === "connected" ? " is-connected" : ""}`}
+          />
+        </div>
         <textarea className="chat-editor__input" rows={4} />
       </div>
 
