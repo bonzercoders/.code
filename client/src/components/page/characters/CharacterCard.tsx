@@ -3,13 +3,6 @@ import { Plus, UserRound, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -25,7 +18,6 @@ interface CharacterCardProps {
   mode: CharacterCardMode
   draft: CharacterDraft
   activeTab: CharacterTab
-  voiceOptions: string[]
   onTabChange: (tab: CharacterTab) => void
   onChange: (changes: Partial<CharacterDraft>) => void
   onSave: () => void
@@ -43,7 +35,6 @@ export function CharacterCard({
   mode,
   draft,
   activeTab,
-  voiceOptions,
   onTabChange,
   onChange,
   onSave,
@@ -118,8 +109,8 @@ export function CharacterCard({
                 onClick={() => fileInputRef.current?.click()}
                 type="button"
               >
-                {draft.imageDataUrl ? (
-                  <img alt={displayName} className="character-card__upload-image" src={draft.imageDataUrl} />
+                {draft.imageUrl ? (
+                  <img alt={displayName} className="character-card__upload-image" src={draft.imageUrl} />
                 ) : (
                   <div className="character-card__upload-empty" aria-hidden="true">
                     <UserRound size={62} />
@@ -144,8 +135,8 @@ export function CharacterCard({
               <Textarea
                 className="character-card__textarea character-card__textarea--global"
                 id="character-global-roleplay-prompt"
-                onChange={(event) => onChange({ globalRoleplayPrompt: event.target.value })}
-                value={draft.globalRoleplayPrompt}
+                onChange={(event) => onChange({ globalRoleplay: event.target.value })}
+                value={draft.globalRoleplay}
               />
 
               <label className="character-card__label" htmlFor="character-name-input">
@@ -158,21 +149,16 @@ export function CharacterCard({
                 value={draft.name}
               />
 
-              <label className="character-card__label" htmlFor="character-voice-select">
-                Voice
+              <label className="character-card__label" htmlFor="character-voice-input">
+                Voice ID
               </label>
-              <Select onValueChange={(value) => onChange({ voice: value })} value={draft.voice || undefined}>
-                <SelectTrigger className="character-card__select" id="character-voice-select">
-                  <SelectValue placeholder="Select voice" />
-                </SelectTrigger>
-                <SelectContent>
-                  {voiceOptions.map((voiceOption) => (
-                    <SelectItem key={voiceOption} value={voiceOption}>
-                      {voiceOption}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                className="character-card__input"
+                id="character-voice-input"
+                onChange={(event) => onChange({ voiceId: event.target.value })}
+                placeholder="Enter voice ID"
+                value={draft.voiceId}
+              />
 
               <label className="character-card__label" htmlFor="character-system-prompt">
                 System Prompt
@@ -188,53 +174,8 @@ export function CharacterCard({
           </div>
         </TabsContent>
 
-        <TabsContent className="character-card__tab-content" value="background">
-          <div className="character-card__notes-wrap">
-            <p className="character-card__notes-title">Background</p>
-            <Textarea
-              className="character-card__textarea"
-              onChange={(event) => onChange({ backgroundNotes: event.target.value })}
-              placeholder="Add background notes for this character"
-              value={draft.backgroundNotes}
-            />
-          </div>
-        </TabsContent>
-
-        <TabsContent className="character-card__tab-content" value="chats">
-          <div className="character-card__notes-wrap">
-            <p className="character-card__notes-title">Chats</p>
-            <Textarea
-              className="character-card__textarea"
-              onChange={(event) => onChange({ chatNotes: event.target.value })}
-              placeholder="Add chat notes or starter dialogue"
-              value={draft.chatNotes}
-            />
-          </div>
-        </TabsContent>
-
-        <TabsContent className="character-card__tab-content" value="groups">
-          <div className="character-card__notes-wrap">
-            <p className="character-card__notes-title">Groups</p>
-            <Textarea
-              className="character-card__textarea"
-              onChange={(event) => onChange({ groupNotes: event.target.value })}
-              placeholder="Add group context for this character"
-              value={draft.groupNotes}
-            />
-          </div>
-        </TabsContent>
-
-        <TabsContent className="character-card__tab-content" value="memory">
-          <div className="character-card__notes-wrap">
-            <p className="character-card__notes-title">Memory</p>
-            <Textarea
-              className="character-card__textarea"
-              onChange={(event) => onChange({ memoryNotes: event.target.value })}
-              placeholder="Add memory snippets for this character"
-              value={draft.memoryNotes}
-            />
-          </div>
-        </TabsContent>
+        <TabsContent className="character-card__tab-content character-card__tab-content--blank" value="background" />
+        <TabsContent className="character-card__tab-content character-card__tab-content--blank" value="chats" />
       </Tabs>
 
       <footer className="character-card__footer">

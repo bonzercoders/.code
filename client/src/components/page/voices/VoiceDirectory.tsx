@@ -32,7 +32,7 @@ function getLetterAnchor(letter: string): string {
 }
 
 function getVoicePreview(voice: Voice, limit = 106): string {
-  const source = voice.speakerDescription.trim() || voice.scenePrompt.trim()
+  const source = voice.speakerDesc.trim() || voice.scenePrompt.trim()
 
   if (!source) {
     return ""
@@ -56,7 +56,7 @@ export function VoiceDirectory({ voices, selectedId, onCreate, onPreview, onSele
     }
 
     return voices.filter((voice) => {
-      const haystack = `${voice.voiceName} ${voice.method} ${voice.speakerDescription} ${voice.scenePrompt}`.toLowerCase()
+      const haystack = `${voice.voiceName} ${voice.method} ${voice.speakerDesc} ${voice.scenePrompt}`.toLowerCase()
       return haystack.includes(normalizedQuery)
     })
   }, [query, voices])

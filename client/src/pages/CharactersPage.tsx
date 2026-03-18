@@ -2,98 +2,31 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { CharacterDirectory } from "@/components/page/characters/CharacterDirectory"
 import { CharacterEditor } from "@/components/page/characters/CharacterEditor"
-import { type Character, type CharacterDraft, type CharacterTab, createEmptyCharacterDraft } from "@/lib/characters"
+import {
+  type Character,
+  type CharacterDraft,
+  type CharacterTab,
+  createCharacterId,
+  createEmptyCharacterDraft,
+  toCharacterDraft,
+} from "@/lib/characters"
+import {
+  deleteCharacter,
+  fetchCharacters,
+  insertCharacter,
+  updateCharacter,
+} from "@/lib/supabase/characters"
 import { cn } from "@/lib/utils"
 
-const CHARACTERS_STORAGE_KEY = "aichat.characters.v1"
-const VOICE_OPTIONS = ["Alloy", "Ash", "Breeze", "Cora", "Juniper", "Sage", "Vale"]
 const EDITOR_TRANSITION_MS = 220
 const EDITOR_ENTER_DELAY_MS = 18
 
 type EditorMode = "create" | "edit"
 type EditorPhase = "hidden" | "entering" | "entered" | "exiting"
 
-function readText(value: unknown): string {
-  return typeof value === "string" ? value : ""
-}
-
-function normalizeStoredCharacter(value: unknown): Character | null {
-  if (!value || typeof value !== "object") {
-    return null
-  }
-
-  const defaults = createEmptyCharacterDraft()
-  const record = value as Record<string, unknown>
-  const characterId = readText(record.id).trim()
-
-  if (!characterId) {
-    return null
-  }
-
-  return {
-    id: characterId,
-    name: readText(record.name),
-    voice: readText(record.voice),
-    globalRoleplayPrompt: readText(record.globalRoleplayPrompt) || defaults.globalRoleplayPrompt,
-    systemPrompt: readText(record.systemPrompt),
-    imageDataUrl: readText(record.imageDataUrl),
-    backgroundNotes: readText(record.backgroundNotes),
-    chatNotes: readText(record.chatNotes),
-    groupNotes: readText(record.groupNotes),
-    memoryNotes: readText(record.memoryNotes),
-  }
-}
-
-function loadCharactersFromStorage(): Character[] {
-  if (typeof window === "undefined") {
-    return []
-  }
-
-  const rawValue = window.localStorage.getItem(CHARACTERS_STORAGE_KEY)
-
-  if (!rawValue) {
-    return []
-  }
-
-  try {
-    const parsedValue = JSON.parse(rawValue)
-
-    if (!Array.isArray(parsedValue)) {
-      return []
-    }
-
-    return parsedValue
-      .map((entry) => normalizeStoredCharacter(entry))
-      .filter((character): character is Character => character !== null)
-  } catch {
-    return []
-  }
-}
-
-function toDraft(character: Character): CharacterDraft {
-  return {
-    name: character.name,
-    voice: character.voice,
-    globalRoleplayPrompt: character.globalRoleplayPrompt,
-    systemPrompt: character.systemPrompt,
-    imageDataUrl: character.imageDataUrl,
-    backgroundNotes: character.backgroundNotes,
-    chatNotes: character.chatNotes,
-    groupNotes: character.groupNotes,
-    memoryNotes: character.memoryNotes,
-  }
-}
-
-function createCharacterId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID()
-  }
-
-  return `character-${Date.now()}-${Math.floor(Math.random() * 100000)}`
-}
-
 export function CharactersPage() {
-  const [characters, setCharacters] = useState<Character[]>(loadCharactersFromStorage)
+  const [characters, setCharacters] = useState<Character[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [editorMode, setEditorMode] = useState<EditorMode>("create")
@@ -110,8 +43,11 @@ export function CharactersPage() {
   )
 
   useEffect(() => {
-    window.localStorage.setItem(CHARACTERS_STORAGE_KEY, JSON.stringify(characters))
-  }, [characters])
+    fetchCharacters()
+      .then(setCharacters)
+      .catch((error) => console.error("Failed to load characters:", error))
+      .finally(() => setIsLoading(false))
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -203,12 +139,12 @@ export function CharactersPage() {
       setEditorMode("edit")
       setSelectedCharacterId(characterId)
       setActiveTab("profile")
-      setDraft(toDraft(character))
+      setDraft(toCharacterDraft(character))
     })
   }
 
   const closeEditor = () => {
-    const resetDraft = editorMode === "edit" && selectedCharacter ? toDraft(selectedCharacter) : createEmptyCharacterDraft()
+    const resetDraft = editorMode === "edit" && selectedCharacter ? toCharacterDraft(selectedCharacter) : createEmptyCharacterDraft()
 
     unmountEditorWithPop(() => {
       setActiveTab("profile")
@@ -216,58 +152,59 @@ export function CharactersPage() {
     })
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const normalizedName = draft.name.trim()
-    const normalizedVoice = draft.voice.trim()
+    const saveDraft = { ...draft, name: normalizedName || "Untitled" }
 
-    if (editorMode === "create") {
-      const nextCharacter: Character = {
-        id: createCharacterId(),
-        ...draft,
-        name: normalizedName || "Untitled",
-        voice: normalizedVoice,
+    try {
+      if (editorMode === "create") {
+        const id = createCharacterId()
+        const created = await insertCharacter(saveDraft, id)
+
+        setCharacters((prev) => [created, ...prev])
+        setSelectedCharacterId(created.id)
+        setEditorMode("edit")
+        setDraft(toCharacterDraft(created))
+        return
       }
 
-      setCharacters((previousCharacters) => [nextCharacter, ...previousCharacters])
-      setSelectedCharacterId(nextCharacter.id)
-      setEditorMode("edit")
-      setDraft(toDraft(nextCharacter))
-      return
+      if (!selectedCharacterId) {
+        return
+      }
+
+      const updated = await updateCharacter(selectedCharacterId, saveDraft)
+
+      setCharacters((prev) =>
+        prev.map((character) => (character.id === selectedCharacterId ? updated : character))
+      )
+
+      setDraft(toCharacterDraft(updated))
+    } catch (error) {
+      console.error("Failed to save character:", error)
     }
-
-    if (!selectedCharacterId) {
-      return
-    }
-
-    const nextCharacter: Character = {
-      id: selectedCharacterId,
-      ...draft,
-      name: normalizedName || "Untitled",
-      voice: normalizedVoice,
-    }
-
-    setCharacters((previousCharacters) =>
-      previousCharacters.map((character) => (character.id === selectedCharacterId ? nextCharacter : character))
-    )
-
-    setDraft(toDraft(nextCharacter))
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (editorMode !== "edit" || !selectedCharacterId) {
       return
     }
 
-    setCharacters((previousCharacters) =>
-      previousCharacters.filter((character) => character.id !== selectedCharacterId)
-    )
+    try {
+      await deleteCharacter(selectedCharacterId)
 
-    unmountEditorWithPop(() => {
-      setSelectedCharacterId(null)
-      setEditorMode("create")
-      setActiveTab("profile")
-      setDraft(createEmptyCharacterDraft())
-    })
+      setCharacters((prev) =>
+        prev.filter((character) => character.id !== selectedCharacterId)
+      )
+
+      unmountEditorWithPop(() => {
+        setSelectedCharacterId(null)
+        setEditorMode("create")
+        setActiveTab("profile")
+        setDraft(createEmptyCharacterDraft())
+      })
+    } catch (error) {
+      console.error("Failed to delete character:", error)
+    }
   }
 
   const handleDirectoryChat = (characterId: string) => {
@@ -279,15 +216,15 @@ export function CharactersPage() {
     const fileReader = new FileReader()
 
     fileReader.onload = () => {
-      const imageDataUrl = typeof fileReader.result === "string" ? fileReader.result : ""
+      const imageUrl = typeof fileReader.result === "string" ? fileReader.result : ""
 
-      if (!imageDataUrl) {
+      if (!imageUrl) {
         return
       }
 
       setDraft((previousDraft) => ({
         ...previousDraft,
-        imageDataUrl,
+        imageUrl,
       }))
     }
 
@@ -300,6 +237,14 @@ export function CharactersPage() {
     editorPhase === "entered" && "is-entered",
     editorPhase === "exiting" && "is-exiting"
   )
+
+  if (isLoading) {
+    return (
+      <div className="page-canvas characters-page">
+        <div className="characters-page__loading">Loading characters...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="page-canvas characters-page">
@@ -325,7 +270,6 @@ export function CharactersPage() {
               onImageUpload={handleImageUpload}
               onSave={handleSave}
               onTabChange={setActiveTab}
-              voiceOptions={VOICE_OPTIONS}
             />
           </div>
         ) : (

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /d/.code/client/src/components -type f -name *.tsx -o -name *.ts)",
+      "Bash(find /d/.code/client/src/pages -type f -name *.tsx)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts|css\\)$\")",
+      "mcp__plugin_supabase_supabase__list_projects",
+      "mcp__plugin_supabase_supabase__search_docs",
+      "mcp__plugin_supabase_supabase__list_tables",
+      "WebFetch(domain:supabase.com)",
+      "mcp__6de27560-a4c3-44e4-97cc-c9846097c955__list_tables",
+      "Bash(npm install:*)",
+      "mcp__plugin_supabase_supabase__execute_sql",
+      "Bash(npm run:*)"
+    ]
+  }
+}

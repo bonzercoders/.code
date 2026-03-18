@@ -4,13 +4,6 @@ import { type ChangeEvent, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { CHARACTER_TAB_VALUES, type CharacterDraft, type CharacterTab } from "@/lib/characters"
@@ -22,7 +15,6 @@ interface CharacterEditorProps {
   mode: CharacterEditorMode
   draft: CharacterDraft
   activeTab: CharacterTab
-  voiceOptions: string[]
   onChange: (changes: Partial<CharacterDraft>) => void
   onTabChange: (tab: CharacterTab) => void
   onChat: () => void
@@ -32,14 +24,12 @@ interface CharacterEditorProps {
   onImageUpload: (file: File) => void
 }
 
-const TAB_ORDER: CharacterTab[] = ["profile", "background", "chats", "groups", "memory"]
+const TAB_ORDER: CharacterTab[] = ["profile", "background", "chats"]
 
 const TAB_LABELS: Record<CharacterTab, string> = {
   profile: "Profile",
   background: "Persona",
   chats: "Chats",
-  groups: "Groups",
-  memory: "Memory",
 }
 
 function isCharacterTab(value: string): value is CharacterTab {
@@ -50,7 +40,6 @@ export function CharacterEditor({
   mode,
   draft,
   activeTab,
-  voiceOptions,
   onChange,
   onTabChange,
   onChat,
@@ -109,8 +98,8 @@ export function CharacterEditor({
           <div className="character-editor__profile-layout">
             <div className="character-editor__image-column">
               <label className="character-editor__image-label" htmlFor="character-editor-image-upload">
-                {draft.imageDataUrl ? (
-                  <img alt={displayName} className="character-editor__image" src={draft.imageDataUrl} />
+                {draft.imageUrl ? (
+                  <img alt={displayName} className="character-editor__image" src={draft.imageUrl} />
                 ) : (
                   <span className="character-editor__image-empty" aria-hidden="true">
                     <UserRound size={74} />
@@ -150,8 +139,8 @@ export function CharacterEditor({
                 >
                   <Textarea
                     className="character-editor__textarea character-editor__textarea--global"
-                    onChange={(event) => onChange({ globalRoleplayPrompt: event.target.value })}
-                    value={draft.globalRoleplayPrompt}
+                    onChange={(event) => onChange({ globalRoleplay: event.target.value })}
+                    value={draft.globalRoleplay}
                   />
                 </div>
               </div>
@@ -170,20 +159,15 @@ export function CharacterEditor({
 
               <div className="character-editor__field-block character-editor__field-block--narrow">
                 <Label className="character-editor__label" htmlFor="character-editor-voice">
-                  Voice
+                  Voice ID
                 </Label>
-                <Select onValueChange={(value) => onChange({ voice: value })} value={draft.voice || undefined}>
-                  <SelectTrigger className="character-editor__select" id="character-editor-voice">
-                    <SelectValue placeholder="Select voice" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {voiceOptions.map((voiceOption) => (
-                      <SelectItem key={voiceOption} value={voiceOption}>
-                        {voiceOption}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Input
+                  className="character-editor__input"
+                  id="character-editor-voice"
+                  onChange={(event) => onChange({ voiceId: event.target.value })}
+                  placeholder="Enter voice ID"
+                  value={draft.voiceId}
+                />
               </div>
 
               <div className="character-editor__field-block character-editor__field-block--wide character-editor__field-block--stretch">
@@ -203,8 +187,6 @@ export function CharacterEditor({
 
         <TabsContent className="character-editor__content character-editor__content--blank" value="background" />
         <TabsContent className="character-editor__content character-editor__content--blank" value="chats" />
-        <TabsContent className="character-editor__content character-editor__content--blank" value="groups" />
-        <TabsContent className="character-editor__content character-editor__content--blank" value="memory" />
       </Tabs>
 
       <footer className="character-editor__footer">
@@ -231,4 +213,3 @@ export function CharacterEditor({
     </section>
   )
 }
-

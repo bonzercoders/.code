@@ -30,8 +30,8 @@ export function CharacterCover({ character, onOpen, onChat }: CharacterCoverProp
         role="button"
         tabIndex={0}
       >
-        {character.imageDataUrl ? (
-          <img alt={displayName} className="character-cover__image" src={character.imageDataUrl} />
+        {character.imageUrl ? (
+          <img alt={displayName} className="character-cover__image" src={character.imageUrl} />
         ) : (
           <div className="character-cover__image character-cover__image--empty" aria-hidden="true">
             <UserRound size={56} />

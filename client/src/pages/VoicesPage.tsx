@@ -1,19 +1,22 @@
-﻿import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { VoiceDirectory } from "@/components/page/voices/VoiceDirectory"
 import { VoiceEditor } from "@/components/page/voices/VoiceEditor"
 import {
   createEmptyVoiceDraft,
   createVoiceId,
-  loadVoicesFromStorage,
-  saveVoicesToStorage,
   toVoiceDraft,
   type Voice,
   type VoiceDraft,
 } from "@/lib/voices"
+import {
+  deleteVoice,
+  fetchVoices,
+  insertVoice,
+  updateVoice,
+} from "@/lib/supabase/voices"
 import { cn } from "@/lib/utils"
 
-const VOICES_STORAGE_KEY = "aichat.voices.v1"
 const EDITOR_TRANSITION_MS = 220
 const EDITOR_ENTER_DELAY_MS = 18
 
@@ -21,7 +24,8 @@ type EditorMode = "create" | "edit"
 type EditorPhase = "hidden" | "entering" | "entered" | "exiting"
 
 export function VoicesPage() {
-  const [voices, setVoices] = useState<Voice[]>(() => loadVoicesFromStorage(VOICES_STORAGE_KEY))
+  const [voices, setVoices] = useState<Voice[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [selectedVoiceId, setSelectedVoiceId] = useState<string | null>(null)
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [editorMode, setEditorMode] = useState<EditorMode>("create")
@@ -32,8 +36,11 @@ export function VoicesPage() {
   const exitTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
-    saveVoicesToStorage(VOICES_STORAGE_KEY, voices)
-  }, [voices])
+    fetchVoices()
+      .then(setVoices)
+      .catch((error) => console.error("Failed to load voices:", error))
+      .finally(() => setIsLoading(false))
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -127,52 +134,56 @@ export function VoicesPage() {
     })
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const normalizedName = draft.voiceName.trim()
+    const saveDraft = { ...draft, voiceName: normalizedName || "Untitled Voice" }
 
-    if (editorMode === "create") {
-      const nextVoice: Voice = {
-        voiceId: createVoiceId(),
-        ...draft,
-        voiceName: normalizedName || "Untitled Voice",
+    try {
+      if (editorMode === "create") {
+        const id = createVoiceId()
+        const created = await insertVoice(saveDraft, id)
+
+        setVoices((prev) => [created, ...prev])
+        setSelectedVoiceId(created.voiceId)
+        setEditorMode("edit")
+        setDraft(toVoiceDraft(created))
+        return
       }
 
-      setVoices((previousVoices) => [nextVoice, ...previousVoices])
-      setSelectedVoiceId(nextVoice.voiceId)
-      setEditorMode("edit")
-      setDraft(toVoiceDraft(nextVoice))
-      return
+      if (!selectedVoiceId) {
+        return
+      }
+
+      const updated = await updateVoice(selectedVoiceId, saveDraft)
+
+      setVoices((prev) =>
+        prev.map((voice) => (voice.voiceId === selectedVoiceId ? updated : voice))
+      )
+
+      setDraft(toVoiceDraft(updated))
+    } catch (error) {
+      console.error("Failed to save voice:", error)
     }
-
-    if (!selectedVoiceId) {
-      return
-    }
-
-    const nextVoice: Voice = {
-      voiceId: selectedVoiceId,
-      ...draft,
-      voiceName: normalizedName || "Untitled Voice",
-    }
-
-    setVoices((previousVoices) =>
-      previousVoices.map((voice) => (voice.voiceId === selectedVoiceId ? nextVoice : voice))
-    )
-
-    setDraft(toVoiceDraft(nextVoice))
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (editorMode !== "edit" || !selectedVoiceId) {
       return
     }
 
-    setVoices((previousVoices) => previousVoices.filter((voice) => voice.voiceId !== selectedVoiceId))
+    try {
+      await deleteVoice(selectedVoiceId)
 
-    unmountEditorWithPop(() => {
-      setSelectedVoiceId(null)
-      setEditorMode("create")
-      setDraft(createEmptyVoiceDraft())
-    })
+      setVoices((prev) => prev.filter((voice) => voice.voiceId !== selectedVoiceId))
+
+      unmountEditorWithPop(() => {
+        setSelectedVoiceId(null)
+        setEditorMode("create")
+        setDraft(createEmptyVoiceDraft())
+      })
+    } catch (error) {
+      console.error("Failed to delete voice:", error)
+    }
   }
 
   const handlePreview = (voiceId: string) => {
@@ -186,6 +197,14 @@ export function VoicesPage() {
     editorPhase === "entered" && "is-entered",
     editorPhase === "exiting" && "is-exiting"
   )
+
+  if (isLoading) {
+    return (
+      <div className="page-canvas voices-page">
+        <div className="voices-page__loading">Loading voices...</div>
+      </div>
+    )
+  }
 
   return (
     <div className="page-canvas voices-page">
@@ -220,4 +239,3 @@ export function VoicesPage() {
     </div>
   )
 }
-

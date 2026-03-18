@@ -104,9 +104,9 @@ export function VoiceEditor({ mode, voiceDraft, onChange, onDelete, onSave }: Vo
                 <Input
                   className="voice-editor__input"
                   id="voice-editor-reference-text"
-                  onChange={(event) => onChange({ referenceText: event.target.value })}
+                  onChange={(event) => onChange({ refText: event.target.value })}
                   placeholder="Enter reference text path"
-                  value={voiceDraft.referenceText}
+                  value={voiceDraft.refText}
                 />
               </div>
 
@@ -117,9 +117,9 @@ export function VoiceEditor({ mode, voiceDraft, onChange, onDelete, onSave }: Vo
                 <Input
                   className="voice-editor__input"
                   id="voice-editor-reference-audio"
-                  onChange={(event) => onChange({ referenceAudio: event.target.value })}
+                  onChange={(event) => onChange({ refAudio: event.target.value })}
                   placeholder="Enter reference audio path"
-                  value={voiceDraft.referenceAudio}
+                  value={voiceDraft.refAudio}
                 />
               </div>
             </div>
@@ -131,9 +131,9 @@ export function VoiceEditor({ mode, voiceDraft, onChange, onDelete, onSave }: Vo
               <Textarea
                 className="voice-editor__textarea voice-editor__textarea--speaker"
                 id="voice-editor-speaker-description"
-                onChange={(event) => onChange({ speakerDescription: event.target.value })}
+                onChange={(event) => onChange({ speakerDesc: event.target.value })}
                 placeholder="Enter speaker description"
-                value={voiceDraft.speakerDescription}
+                value={voiceDraft.speakerDesc}
               />
             </div>
           </div>

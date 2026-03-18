@@ -33,7 +33,7 @@ function getLetterAnchor(letter: string): string {
 
 function getPromptPreview(character: Character, limit = 106): string {
   const promptSource =
-    character.systemPrompt.trim() || character.backgroundNotes.trim() || character.globalRoleplayPrompt.trim()
+    character.systemPrompt.trim() || character.globalRoleplay.trim()
 
   if (!promptSource) {
     return ""
@@ -70,7 +70,7 @@ export function CharacterDirectory({ characters, selectedId, onSelect, onCreate,
     }
 
     return characters.filter((character) => {
-      const haystack = `${character.name} ${character.systemPrompt} ${character.backgroundNotes}`.toLowerCase()
+      const haystack = `${character.name} ${character.systemPrompt}`.toLowerCase()
       return haystack.includes(normalizedQuery)
     })
   }, [characters, query])
@@ -173,8 +173,8 @@ export function CharacterDirectory({ characters, selectedId, onSelect, onCreate,
                             tabIndex={0}
                           >
                             <div className="character-directory__media" aria-hidden="true">
-                              {character.imageDataUrl ? (
-                                <img alt={character.name.trim() || "Character"} src={character.imageDataUrl} />
+                              {character.imageUrl ? (
+                                <img alt={character.name.trim() || "Character"} src={character.imageUrl} />
                               ) : (
                                 <span className="character-directory__media-fallback">
                                   <UserRound size={14} />
