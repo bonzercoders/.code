@@ -2,11 +2,11 @@ import { type ComponentType, useEffect, useState } from "react"
 
 import { AppLayout } from "@/components/page/AppLayout"
 import { type AppRoute } from "@/lib/navigation"
-import { AgentsPage } from "@/pages/Agents/AgentsPage"
-import { CharactersPage } from "@/pages/Characters/CharactersPage"
-import { HomePage } from "@/pages/Home/HomePage"
-import { SettingsPage } from "@/pages/Settings/SettingsPage"
-import { VoicesPage } from "@/pages/Voices/VoicesPage"
+import { AgentsPage } from "@/pages/AgentsPage"
+import { CharactersPage } from "@/pages/CharactersPage"
+import { HomePage } from "@/pages/HomePage"
+import { SettingsPage } from "@/pages/SettingsPage"
+import { VoicesPage } from "@/pages/VoicesPage"
 
 const DEFAULT_ROUTE: AppRoute = "/home"
 

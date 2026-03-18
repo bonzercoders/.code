@@ -19,9 +19,7 @@ Single-user application. Do not over-engineer for enterprise scale or multi-tena
 
 ## Directory Structure
 
-.workspace/code/app
-
-app
+.code/
 ├── server
 ├── client
 │   └── src
@@ -32,11 +30,11 @@ app
 │       │   └── ui
 │       ├── lib
 │       └── pages
-│           ├── Home
-│           ├── Agents
-│           ├── Characters
-│           ├── Voices
-│           └── Settings
+│           ├── HomePage.tsx
+│           ├── AgentsPage.tsx
+│           ├── CharactersPage.tsx
+│           ├── VoicesPage.tsx
+│           └── SettingsPage.tsx
 ├── CLAUDE.md
 ├── AGENTS.md
 ├── requirements_higgs.txt
