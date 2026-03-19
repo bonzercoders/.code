@@ -6,9 +6,15 @@ import logging
 import numpy as np
 from dataclasses import dataclass
 from typing import Callable, Optional, Dict, List, AsyncGenerator, Protocol
-from server.database.supabase import db, Voice
 from server.tts.boson_multimodal.serve.serve_engine import HiggsAudioServeEngine
 from server.tts.boson_multimodal.data_types import ChatMLSample, Message, AudioContent, TextContent
+
+from server.db.models import Voice
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from server.db.realtime import RealtimeSync
+
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +63,9 @@ def revert_delay_pattern(data: torch.Tensor, start_idx: int = 0) -> torch.Tensor
     return torch.cat(out, dim=0)
 
 class TTS:
-    def __init__(self, queues: TTSQueues, is_turn_cancelled: Optional[Callable[[str], bool]] = None):
+    def __init__(self, queues: TTSQueues, db: "RealtimeSync", is_turn_cancelled: Optional[Callable[[str], bool]] = None):
         self.queues = queues
+        self.db = db
         self._task_tts_worker: Optional[asyncio.Task] = None
         self.is_turn_cancelled = is_turn_cancelled
 
@@ -183,7 +190,9 @@ class TTS:
         if self.is_turn_cancelled and self.is_turn_cancelled(turn_id):
             return
 
-        selected_voice = await db.get_voice(voice_id)
+        selected_voice = self.db.get_voice(voice_id)
+        if not selected_voice:
+            raise ValueError(f"Voice '{voice_id}' not found in database")
         messages = await self.load_voice_reference(selected_voice)
         messages.append(Message(role="user", content=text))
 
@@ -277,16 +286,12 @@ class TTS:
             except Exception as e:
                 logger.warning(f"Error flushing remaining audio: {e}")
 
-    async def get_available_voices(self) -> List[Dict[str, str]]:
+    def get_available_voices(self) -> List[Dict[str, str]]:
         """Get list of available voices formatted for frontend."""
-        try:
-            db_voices = await db.get_all_voices()
-            voices = [{"voice_id": voice.voice_id, "voice_name": voice.voice_name} for voice in db_voices]
-            voices.sort(key=lambda item: item["voice_name"].lower())
-            return voices
-        except Exception as e:
-            logger.error(f"Error getting available voices: {e}")
-            return []
+        all_voices = self.db.get_all_voices()
+        voices = [{"voice_id": v.voice_id, "voice_name": v.voice_name} for v in all_voices]
+        voices.sort(key=lambda item: item["voice_name"].lower())
+        return voices
 
     def shutdown(self):
         """Cleanup resources"""

@@ -33,6 +33,7 @@ from typing import Callable, Optional, Dict, List, Union, Any, AsyncIterator, As
 from server.stt import AudioToTextRecorder
 from server.stream2sentence import generate_sentences_async
 from server.tts.tts_generation import TTS, TTSSentence, AudioResponseDone, AudioChunk
+from server.db import Character, Voice, RealtimeSync
 
 logging.basicConfig(filename="filelogger.log", format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -275,7 +276,7 @@ class STT:
 
 class ChatLLM:
 
-    def __init__(self, queues: PipeQueues, api_key: str,
+    def __init__(self, queues: PipeQueues, api_key: str, db: RealtimeSync,
                  on_text_stream_start: Optional[Callable[["Character", str, str], Awaitable[None]]] = None,
                  on_text_stream_stop: Optional[Callable[["Character", str, str, str, bool], Awaitable[None]]] = None,
                  on_text_chunk: Optional[Callable[[str, "Character", str, str], Awaitable[None]]] = None,
@@ -284,9 +285,9 @@ class ChatLLM:
         self.conversation_history: List[Dict] = []
         self.conversation_id: Optional[str] = None
         self.queues = queues
+        self.db = db
         self.client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
         self.model_settings: Optional[ModelSettings] = None
-        self.active_characters: List[Character] = []
         self.user_name: str = "Jay"
 
         self.on_text_stream_start = on_text_stream_start
@@ -294,11 +295,13 @@ class ChatLLM:
         self.on_text_chunk = on_text_chunk
         self.is_turn_cancelled = is_turn_cancelled
 
+    @property
+    def active_characters(self) -> List[Character]:
+        """Live list of active characters, always in sync via RealtimeSync."""
+        return self.db.get_active_characters()
+
     async def initialize(self):
-        """Load active characters from database on startup."""
-        #self.active_characters = await db.get_active_characters()
-        # I have purposely removed many of the functions to get active characters so as not to mislead with the poorly designed/written functions
-        # of previous versions. Our job is to do this correctly.
+        """Called after RealtimeSync.start() has loaded data."""
         logger.info(f"ChatLLM initialized with {len(self.active_characters)} active characters")
 
     async def start_new_conversation(self):
@@ -329,14 +332,6 @@ class ChatLLM:
     async def set_model_settings(self, model_settings: ModelSettings):
         """Set model settings for LLM requests"""
         self.model_settings = model_settings
-
-    #async def get_active_characters(self) -> List[Character]:
-        """Refresh active characters from database"""
-        #self.active_characters = await db.get_active_characters()
-        #return self.active_characters
-
-        # IMPORTANT! - you will notice that functions to get active characters, as well asdefinitions like Character(s) and db are missing.
-        # This was done purposely as we need to update and do not want to rely on any previous code that was not well done.
 
     def character_instruction_message(self, character: Character) -> Dict[str, str]:
         """Explicit Character Instructions â€” pure computation, no I/O."""
@@ -611,8 +606,9 @@ class WebSocketManager:
         self.active_text_stream: Optional[ActiveTextStream] = None
         self.stt_state: str = "inactive"
 
-    async def initialize(self):
+    async def initialize(self, db: RealtimeSync):
         """Initialize all pipeline components at startup."""
+        self.db = db
         api_key = os.getenv("OPENROUTER_API_KEY", "")
 
         self.stt = STT(
@@ -631,6 +627,7 @@ class WebSocketManager:
         self.chat = ChatLLM(
             queues=self.queues,
             api_key=api_key,
+            db=db,
             on_text_stream_start=self.on_text_stream_start,
             on_text_stream_stop=self.on_text_stream_stop,
             on_text_chunk=self.on_text_chunk,
@@ -638,7 +635,7 @@ class WebSocketManager:
         )
         await self.chat.initialize()
 
-        self.tts = TTS(queues=self.queues, is_turn_cancelled=self.is_turn_cancelled)
+        self.tts = TTS(queues=self.queues, db=db, is_turn_cancelled=self.is_turn_cancelled)
         await self.tts.initialize()
 
         logger.info(f"Initialized with {len(self.chat.active_characters)} active characters")
@@ -822,10 +819,10 @@ class WebSocketManager:
             logger.debug("[Transport] Audio streamer cancelled")
 
     async def refresh_active_characters(self):
-        """Refresh active characters from database (call when characters change)."""
+        """Log current active characters. Data is kept in sync
+        automatically via RealtimeSync broadcast subscriptions."""
         if self.chat:
-            self.chat.active_characters = await self.chat.get_active_characters()
-            logger.info(f"Refreshed to {len(self.chat.active_characters)} active characters")
+            logger.info(f"Active characters: {len(self.chat.active_characters)}")
 
     async def on_transcription_update(self, text: str):
         await self.send_text_to_client({"type": "stt_update", "text": text})
@@ -1030,12 +1027,14 @@ class WebSocketManager:
 ########################################
 
 ws_manager = WebSocketManager()
+db = RealtimeSync()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Starting up services...")
 
-    await ws_manager.initialize()
+    await db.start()
+    await ws_manager.initialize(db)
 
     print("All services initialised!")
 
@@ -1043,6 +1042,7 @@ async def lifespan(app: FastAPI):
 
     print("Shutting down services...")
     await ws_manager.shutdown()
+    await db.stop()
     print("All services shut down!")
 
 app = FastAPI(lifespan=lifespan)
