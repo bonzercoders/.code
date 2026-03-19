@@ -1,22 +1,38 @@
-import { type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from "react"
+import {
+  type ChangeEvent,
+  type KeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { Plus } from "lucide-react"
 
 import micIcon from "@/assets/mic.png"
 import { Button } from "@/components/ui/button"
-import { useVoiceSocket } from "@/lib/useVoiceSocket"
+import { type ConnectionStatus } from "@/lib/websocket"
 
 const MENU_ITEMS = ["File upload", "New chat"]
 
-const STATUS_LABEL: Record<string, string> = {
+const STATUS_LABEL: Record<ConnectionStatus, string> = {
   connected: "Connected",
   connecting: "Connecting...",
   disconnected: "Disconnected",
 }
 
-export function ChatEditor() {
-  const { status } = useVoiceSocket()
+interface ChatEditorProps {
+  status: ConnectionStatus
+  value: string
+  onValueChange: (nextValue: string) => void
+  onSend: () => void
+}
+
+export function ChatEditor({ status, value, onValueChange, onSend }: ChatEditorProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
+
+  const canSend = useMemo(() => value.trim().length > 0, [value])
 
   useEffect(() => {
     if (!isMenuOpen) {
@@ -43,6 +59,22 @@ export function ChatEditor() {
     setIsMenuOpen((previous) => !previous)
   }
 
+  const handleInputChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    onValueChange(event.target.value)
+  }
+
+  const handleInputKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return
+    }
+
+    event.preventDefault()
+
+    if (canSend) {
+      onSend()
+    }
+  }
+
   return (
     <div aria-label="Chat editor" className="chat-editor" role="group">
       <div className="chat-editor__input-wrap">
@@ -52,7 +84,14 @@ export function ChatEditor() {
             className={`chat-editor__status-dot${status === "connected" ? " is-connected" : ""}`}
           />
         </div>
-        <textarea className="chat-editor__input" rows={4} />
+        <textarea
+          className="chat-editor__input"
+          onChange={handleInputChange}
+          onKeyDown={handleInputKeyDown}
+          placeholder="Type your message..."
+          rows={4}
+          value={value}
+        />
       </div>
 
       <div className="chat-editor__toolbar">
@@ -93,7 +132,7 @@ export function ChatEditor() {
           >
             <img alt="" aria-hidden="true" className="chat-editor__mic-icon" src={micIcon} />
           </button>
-          <Button className="chat-editor__send-button" type="button">
+          <Button className="chat-editor__send-button" disabled={!canSend} onClick={onSend} type="button">
             Send
           </Button>
         </div>

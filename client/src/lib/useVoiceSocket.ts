@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { type ConnectionStatus, VoiceSocket, getWebSocketUrl } from "./websocket"
 
@@ -7,13 +7,14 @@ interface UseVoiceSocketOptions {
   onBinary?: (data: ArrayBuffer) => void
 }
 
-const noop = () => {}
-
 export function useVoiceSocket(options: UseVoiceSocketOptions = {}) {
   const [status, setStatus] = useState<ConnectionStatus>("disconnected")
   const socketRef = useRef<VoiceSocket | null>(null)
-  const handlersRef = useRef(options)
-  handlersRef.current = options
+  const handlersRef = useRef<UseVoiceSocketOptions>(options)
+
+  useEffect(() => {
+    handlersRef.current = options
+  }, [options])
 
   useEffect(() => {
     const socket = new VoiceSocket({
@@ -31,5 +32,13 @@ export function useVoiceSocket(options: UseVoiceSocketOptions = {}) {
     }
   }, [])
 
-  return { status, socket: socketRef }
+  const sendText = useCallback((data: Record<string, unknown>) => {
+    socketRef.current?.sendText(data)
+  }, [])
+
+  const sendBinary = useCallback((data: ArrayBuffer | Uint8Array) => {
+    socketRef.current?.sendBinary(data)
+  }, [])
+
+  return { status, sendText, sendBinary }
 }
