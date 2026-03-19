@@ -101,6 +101,9 @@ class TTS:
 
             try:
                 if isinstance(item, AudioResponseDone):
+                    if self.engine is not None:
+                        self.engine.clear_generated_audio_ids(item.turn_id)
+
                     if self.is_turn_cancelled and self.is_turn_cancelled(item.turn_id):
                         logger.info(f"[TTS] Dropping completion sentinel for cancelled turn {item.turn_id}")
                         continue
@@ -196,7 +199,7 @@ class TTS:
         messages = await self.load_voice_reference(selected_voice)
         messages.append(Message(role="user", content=text))
 
-        chat_sample = ChatMLSample(messages=messages)
+        chat_sample = ChatMLSample(messages=messages, misc={"turn_id": turn_id, "stream_id": turn_id})
 
         # Initialize streaming state
         audio_tokens: list[torch.Tensor] = []
@@ -213,6 +216,7 @@ class TTS:
                 ras_win_len=7,
                 ras_win_max_num_repeat=2,
                 force_audio_gen=True,
+                stream_id=turn_id,
             ):
                 if self.is_turn_cancelled and self.is_turn_cancelled(turn_id):
                     break

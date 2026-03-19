@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from io import BytesIO
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 from copy import deepcopy
 from transformers import AutoTokenizer, AutoProcessor
 from transformers.cache_utils import StaticCache
@@ -187,6 +187,7 @@ class HiggsAudioServeEngine:
         device: str = "cuda",
         torch_dtype: Union[torch.dtype, str] = "auto",
         kv_cache_lengths: List[int] = [1024, 4096, 8192],  # Multiple KV cache sizes
+        generation_chunk_buffer_size: Optional[int] = None,
     ):
         """
         Initialize the HiggsAudioServeEngine, a serving wrapper for the HiggsAudioModel.
@@ -205,10 +206,15 @@ class HiggsAudioServeEngine:
                 The lengths of the KV caches to use for the model. Used for cuda graph capture when device is cuda.
             torch_dtype (Union[torch.dtype, str]):
                 The dtype to use for the model.
+            generation_chunk_buffer_size (Optional[int]):
+                The number of generated sentence-level audio token blocks to keep for each stream.
         """
         self.device = device
         self.model_name_or_path = model_name_or_path
         self.torch_dtype = torch_dtype
+        self.generation_chunk_buffer_size = generation_chunk_buffer_size
+        self._generated_audio_ids_by_stream: Dict[str, List[torch.Tensor]] = {}
+        self._generated_audio_ids_lock = threading.Lock()
 
         # Initialize model and tokenizer
         self.model = HiggsAudioModel.from_pretrained(model_name_or_path, torch_dtype=torch_dtype).to(device)
@@ -277,7 +283,130 @@ class HiggsAudioServeEngine:
             logger.info(f"Capturing CUDA graphs for each KV cache length")
             self.model.capture_model(self.kv_caches.values())
 
-    def _prepare_inputs(self, chat_ml_sample: ChatMLSample, force_audio_gen: bool = False):
+    def _normalize_audio_token_block(
+        self,
+        audio_tokens: torch.Tensor,
+        context_label: str,
+    ) -> Optional[torch.Tensor]:
+        if audio_tokens is None:
+            return None
+
+        if not isinstance(audio_tokens, torch.Tensor):
+            logger.warning(
+                f"Skipping {context_label} audio tokens because type is {type(audio_tokens)} instead of torch.Tensor"
+            )
+            return None
+
+        audio_tokens = audio_tokens.detach()
+        if audio_tokens.ndim == 1:
+            audio_tokens = audio_tokens[:, None]
+
+        if audio_tokens.ndim != 2:
+            logger.warning(
+                f"Skipping {context_label} audio tokens because tensor shape {tuple(audio_tokens.shape)} is not 2D"
+            )
+            return None
+
+        if audio_tokens.shape[0] != self.audio_num_codebooks:
+            logger.warning(
+                f"Skipping {context_label} audio tokens due to codebook mismatch. "
+                f"Expected {self.audio_num_codebooks}, got {audio_tokens.shape[0]}"
+            )
+            return None
+
+        return audio_tokens.cpu().long().contiguous()
+
+    def _resolve_stream_id(self, chat_ml_sample: ChatMLSample, stream_id: Optional[str] = None) -> Optional[str]:
+        if stream_id is not None and str(stream_id).strip() != "":
+            return str(stream_id)
+
+        if chat_ml_sample.misc is None or not isinstance(chat_ml_sample.misc, dict):
+            return None
+
+        for key in ["stream_id", "session_id", "turn_id", "conversation_id", "message_id"]:
+            value = chat_ml_sample.misc.get(key)
+            if value is not None and str(value).strip() != "":
+                return str(value)
+
+        return None
+
+    def _get_stream_generated_audio_ids(self, stream_id: Optional[str]) -> List[torch.Tensor]:
+        if stream_id is None:
+            return []
+
+        with self._generated_audio_ids_lock:
+            return list(self._generated_audio_ids_by_stream.get(stream_id, []))
+
+    def _finalize_generated_sentence_audio(self, audio_token_chunks: List[torch.Tensor]) -> Optional[torch.Tensor]:
+        if len(audio_token_chunks) == 0:
+            return None
+
+        normalized_chunks = []
+        for audio_tokens in audio_token_chunks:
+            normalized_tokens = self._normalize_audio_token_block(audio_tokens, context_label="generated_sentence")
+            if normalized_tokens is not None:
+                normalized_chunks.append(normalized_tokens)
+
+        if len(normalized_chunks) == 0:
+            return None
+
+        generated_audio_ids = torch.concat(normalized_chunks, dim=1)
+
+        if self.model.config.use_delay_pattern:
+            generated_audio_ids = revert_delay_pattern(generated_audio_ids)
+
+        generated_audio_ids = generated_audio_ids.clip(0, self.audio_codebook_size - 1)
+        if generated_audio_ids.shape[1] > 2:
+            generated_audio_ids = generated_audio_ids[:, 1:-1]
+        else:
+            generated_audio_ids = generated_audio_ids[:, 0:0]
+
+        if generated_audio_ids.shape[1] == 0:
+            return None
+
+        return generated_audio_ids.contiguous()
+
+    def _append_stream_generated_audio_ids(
+        self,
+        stream_id: Optional[str],
+        sentence_audio_ids: torch.Tensor,
+        generation_chunk_buffer_size: Optional[int] = None,
+    ):
+        if stream_id is None or sentence_audio_ids is None:
+            return
+
+        sentence_audio_ids = self._normalize_audio_token_block(sentence_audio_ids, context_label="sentence_context")
+        if sentence_audio_ids is None or sentence_audio_ids.shape[1] == 0:
+            return
+
+        if generation_chunk_buffer_size is None:
+            generation_chunk_buffer_size = self.generation_chunk_buffer_size
+
+        with self._generated_audio_ids_lock:
+            generated_audio_ids = self._generated_audio_ids_by_stream.setdefault(stream_id, [])
+            generated_audio_ids.append(sentence_audio_ids)
+
+            if generation_chunk_buffer_size is not None:
+                if generation_chunk_buffer_size <= 0:
+                    generated_audio_ids.clear()
+                elif len(generated_audio_ids) > generation_chunk_buffer_size:
+                    self._generated_audio_ids_by_stream[stream_id] = generated_audio_ids[
+                        -generation_chunk_buffer_size:
+                    ]
+
+    def clear_generated_audio_ids(self, stream_id: Optional[str] = None):
+        with self._generated_audio_ids_lock:
+            if stream_id is None:
+                self._generated_audio_ids_by_stream.clear()
+            else:
+                self._generated_audio_ids_by_stream.pop(stream_id, None)
+
+    def _prepare_inputs(
+        self,
+        chat_ml_sample: ChatMLSample,
+        force_audio_gen: bool = False,
+        context_audio_tokens: Optional[List[torch.Tensor]] = None,
+    ):
         input_tokens, _, audio_contents, _ = prepare_chatml_sample(
             chat_ml_sample,
             self.tokenizer,
@@ -290,7 +419,7 @@ class HiggsAudioServeEngine:
         input_tokens.extend(postfix)
 
         # Configure the audio inputs
-        audio_ids_l = []
+        prompt_audio_ids = []
         for audio_content in audio_contents:
             if audio_content.audio_url not in ["placeholder", ""]:
                 raw_audio, _ = librosa.load(audio_content.audio_url, sr=self.audio_tokenizer.sampling_rate)
@@ -303,15 +432,22 @@ class HiggsAudioServeEngine:
 
             if raw_audio is not None:
                 audio_ids = self.audio_tokenizer.encode(raw_audio, self.audio_tokenizer.sampling_rate)
-                audio_ids_l.append(audio_ids.squeeze(0).cpu())
+                normalized_audio_ids = self._normalize_audio_token_block(audio_ids.squeeze(0), context_label="prompt")
+                if normalized_audio_ids is not None:
+                    prompt_audio_ids.append(normalized_audio_ids)
 
-        if len(audio_ids_l) > 0:
-            audio_ids_start = torch.tensor(
-                np.cumsum(np.array([0] + [audio_ids.shape[1] for audio_ids in audio_ids_l])),
-                dtype=torch.long,
-                device=self.device,
-            )[0:-1]
-            audio_ids_concat = torch.cat(audio_ids_l, dim=1)
+        context_audio_ids = list(prompt_audio_ids)
+        if context_audio_tokens is not None:
+            for audio_tokens in context_audio_tokens:
+                normalized_audio_ids = self._normalize_audio_token_block(audio_tokens, context_label="context")
+                if normalized_audio_ids is not None:
+                    context_audio_ids.append(normalized_audio_ids)
+
+        if context_audio_ids:
+            audio_ids_concat = torch.concat([audio_ids.cpu() for audio_ids in context_audio_ids], dim=1)
+            audio_ids_start = torch.cumsum(
+                torch.tensor([0] + [audio_ids.shape[1] for audio_ids in context_audio_ids], dtype=torch.long), dim=0
+            )[:-1]
         else:
             audio_ids_start = None
             audio_ids_concat = None
@@ -437,6 +573,8 @@ class HiggsAudioServeEngine:
         ras_win_len: Optional[int] = 7,
         ras_win_max_num_repeat: int = 2,
         seed: Optional[int] = None,
+        stream_id: Optional[str] = None,
+        generation_chunk_buffer_size: Optional[int] = None,
     ):
         """
         Generate audio from a chatml sample.
@@ -449,6 +587,8 @@ class HiggsAudioServeEngine:
             force_audio_gen: Whether to force audio generation. This ensures the model generates audio tokens rather than text tokens.
             ras_win_len: The length of the RAS window. We use 7 by default. You can disable it by setting it to None or <=0.
             ras_win_max_num_repeat: The maximum number of times to repeat the RAS window.
+            stream_id: Stream/session identifier used to persist sentence-level audio token context.
+            generation_chunk_buffer_size: Override for per-stream sentence context buffer size.
         Returns:
              Delta AsyncGenerator
         """
@@ -458,8 +598,15 @@ class HiggsAudioServeEngine:
         if ras_win_len is not None and ras_win_len <= 0:
             ras_win_len = None
 
+        resolved_stream_id = self._resolve_stream_id(chat_ml_sample, stream_id=stream_id)
+        context_audio_tokens = self._get_stream_generated_audio_ids(resolved_stream_id)
+
         with torch.no_grad():
-            inputs = self._prepare_inputs(chat_ml_sample, force_audio_gen=force_audio_gen)
+            inputs = self._prepare_inputs(
+                chat_ml_sample,
+                force_audio_gen=force_audio_gen,
+                context_audio_tokens=context_audio_tokens,
+            )
 
             self._prepare_kv_caches()
 
@@ -487,5 +634,29 @@ class HiggsAudioServeEngine:
             thread = threading.Thread(target=self.model.generate, kwargs=generation_kwargs)
             thread.start()
 
-            async for delta in streamer:
-                yield delta
+            current_sentence_audio_chunks = []
+            sentence_finished = False
+            has_audio_eos = False
+            try:
+                async for delta in streamer:
+                    if delta.audio_tokens is not None:
+                        normalized_tokens = self._normalize_audio_token_block(
+                            delta.audio_tokens,
+                            context_label="stream_delta",
+                        )
+                        if normalized_tokens is not None:
+                            current_sentence_audio_chunks.append(normalized_tokens)
+                            if torch.all(normalized_tokens == self.model.config.audio_stream_eos_id):
+                                has_audio_eos = True
+                    yield delta
+                sentence_finished = True
+            finally:
+                if sentence_finished or has_audio_eos:
+                    sentence_audio_ids = self._finalize_generated_sentence_audio(current_sentence_audio_chunks)
+                    if sentence_audio_ids is not None:
+                        self._append_stream_generated_audio_ids(
+                            resolved_stream_id,
+                            sentence_audio_ids,
+                            generation_chunk_buffer_size=generation_chunk_buffer_size,
+                        )
+

@@ -19,16 +19,35 @@ Single-user application. Do not over-engineer for enterprise scale or multi-tena
 
 ## Directory Structure
 
-.code/
+.code
 ├── server
 ├── client
 │   └── src
 │       ├── assets
 │       ├── components
+│       │   ├── characters
+│       │   │   ├── CharacterDirectory.tsx
+│       │   │   └── CharacterEditor.tsx
 │       │   ├── editor
-│       │   ├── page
-│       │   └── ui
+│       │   │   └── ChatEditor.tsx
+│       │   ├── layout
+│       │   │   ├── AppLayout.tsx
+│       │   │   └── PageCanvas.tsx
+│       │   ├── ui
+│       │   └── voices
+│       │       ├── VoiceDirectory.tsx
+│       │       └── VoiceEditor.tsx
 │       ├── lib
+│       │   ├── supabase
+│       │   │   ├── characters.ts
+│       │   │   ├── client.ts
+│       │   │   └── voices.ts
+│       │   ├── characters.ts
+│       │   ├── navigation.ts
+│       │   ├── useVoiceSocket.ts
+│       │   ├── utils.ts
+│       │   ├── voices.ts
+│       │   └── websocket.ts
 │       └── pages
 │           ├── HomePage.tsx
 │           ├── AgentsPage.tsx
