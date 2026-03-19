@@ -15,7 +15,16 @@
       "Bash(grep -E \"\\\\.py$|^d\")",
       "mcp__plugin_supabase_supabase__list_extensions",
       "WebFetch(domain:pypi.org)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(python3 -c \"import supabase; print\\(supabase.__version__\\)\")",
+      "Bash(pip show:*)",
+      "Bash(python -m pip show supabase)",
+      "Bash(python -m pip show realtime)",
+      "Bash(where python:*)",
+      "Bash(/d/Python/Pythonx3129/python -c \"import supabase; print\\(supabase.__file__\\)\")",
+      "Bash(pip install:*)",
+      "Bash(source code_venv/bin/activate)",
+      "Bash(python3 -c \":*)"
     ]
   }
 }

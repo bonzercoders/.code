@@ -35,7 +35,8 @@ class RealtimeSync:
         self.characters: Dict[str, Character] = {}
         self.voices: Dict[str, Voice] = {}
 
-        # Realtime channel references (set during start)
+        # Supabase client + Realtime channel references (set during start)
+        self._client = None
         self._channel_characters = None
         self._channel_voices = None
 
@@ -64,22 +65,23 @@ class RealtimeSync:
         )
 
         # 2. Subscribe to broadcast channels
-        client = get_client()
+        self._client = await get_client()
 
-        await self._subscribe_characters(client)
-        await self._subscribe_voices(client)
+        await self._subscribe_characters(self._client)
+        await self._subscribe_voices(self._client)
 
     async def stop(self) -> None:
         """Unsubscribe from all broadcast channels."""
-        client = get_client()
+        if not self._client:
+            return
 
         if self._channel_characters:
-            await client.realtime.remove_channel(self._channel_characters)
+            await self._client.realtime.remove_channel(self._channel_characters)
             self._channel_characters = None
             logger.info("Unsubscribed from characters broadcast")
 
         if self._channel_voices:
-            await client.realtime.remove_channel(self._channel_voices)
+            await self._client.realtime.remove_channel(self._channel_voices)
             self._channel_voices = None
             logger.info("Unsubscribed from voices broadcast")
 
