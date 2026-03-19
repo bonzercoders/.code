@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
-import { CharacterDirectory } from "@/components/page/characters/CharacterDirectory"
-import { CharacterEditor } from "@/components/page/characters/CharacterEditor"
+import { CharacterDirectory } from "@/components/characters/CharacterDirectory"
+import { CharacterEditor } from "@/components/characters/CharacterEditor"
 import {
   type Character,
   type CharacterDraft,

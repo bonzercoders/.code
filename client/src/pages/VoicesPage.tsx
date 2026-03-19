@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 
-import { VoiceDirectory } from "@/components/page/voices/VoiceDirectory"
-import { VoiceEditor } from "@/components/page/voices/VoiceEditor"
+import { VoiceDirectory } from "@/components/voices/VoiceDirectory"
+import { VoiceEditor } from "@/components/voices/VoiceEditor"
 import {
   createEmptyVoiceDraft,
   createVoiceId,

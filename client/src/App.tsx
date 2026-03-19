@@ -1,6 +1,6 @@
 import { type ComponentType, useEffect, useState } from "react"
 
-import { AppLayout } from "@/components/page/AppLayout"
+import { AppLayout } from "@/components/layout/AppLayout"
 import { type AppRoute } from "@/lib/navigation"
 import { AgentsPage } from "@/pages/AgentsPage"
 import { CharactersPage } from "@/pages/CharactersPage"
