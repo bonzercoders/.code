@@ -10,7 +10,7 @@ Single-user application. Do not over-engineer for enterprise scale or multi-tena
 
 **Important**
 
-  While Tailwind is installed, as it is required, you are welcome to, and in fact encouraged to use standard CSS when writing code. At very least, please include a div class with readable name.
+  While Tailwind is installed, as it is required, you are welcome to, and in fact encouraged to use standard CSS when writing code.
 
 ## Principles/Style
 
