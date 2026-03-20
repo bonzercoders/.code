@@ -1,4 +1,4 @@
-import { type MouseEvent as ReactMouseEvent, useEffect, useRef, useState } from "react"
+import { type MouseEvent as ReactMouseEvent, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react"
 import { Plus } from "lucide-react"
 
 import micIcon from "@/assets/mic.png"
@@ -15,9 +15,13 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
 
 interface ChatEditorProps {
   status: ConnectionStatus
+  value: string
+  onChange: (value: string) => void
+  onSend: () => void
+  canSend: boolean
 }
 
-export function ChatEditor({ status }: ChatEditorProps) {
+export function ChatEditor({ status, value, onChange, onSend, canSend }: ChatEditorProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
 
@@ -46,6 +50,18 @@ export function ChatEditor({ status }: ChatEditorProps) {
     setIsMenuOpen((previous) => !previous)
   }
 
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return
+    }
+
+    event.preventDefault()
+
+    if (canSend) {
+      onSend()
+    }
+  }
+
   return (
     <div aria-label="Chat editor" className="chat-editor" role="group">
       <div className="chat-editor__input-wrap">
@@ -55,7 +71,14 @@ export function ChatEditor({ status }: ChatEditorProps) {
             className={`chat-editor__status-dot${status === "connected" ? " is-connected" : ""}`}
           />
         </div>
-        <textarea className="chat-editor__input" rows={4} />
+
+        <textarea
+          className="chat-editor__input"
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={handleKeyDown}
+          rows={4}
+          value={value}
+        />
       </div>
 
       <div className="chat-editor__toolbar">
@@ -96,7 +119,7 @@ export function ChatEditor({ status }: ChatEditorProps) {
           >
             <img alt="" aria-hidden="true" className="chat-editor__mic-icon" src={micIcon} />
           </button>
-          <Button className="chat-editor__send-button" type="button">
+          <Button className="chat-editor__send-button" disabled={!canSend} onClick={onSend} type="button">
             Send
           </Button>
         </div>
@@ -104,3 +127,4 @@ export function ChatEditor({ status }: ChatEditorProps) {
     </div>
   )
 }
+

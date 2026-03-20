@@ -58,6 +58,7 @@ class ActiveTextStream:
     message_id: str
     character_id: str
     character_name: str
+    character_image_url: str
     text: str = ""
 
 @dataclass
@@ -753,6 +754,7 @@ class WebSocketManager:
                 "data": {
                     "character_id": interrupted_stream.character_id,
                     "character_name": interrupted_stream.character_name,
+                    "character_image_url": interrupted_stream.character_image_url,
                     "message_id": interrupted_stream.message_id,
                     "text": interrupted_stream.text,
                     "interrupted": True,
@@ -866,6 +868,7 @@ class WebSocketManager:
             message_id=message_id,
             character_id=character.id,
             character_name=character.name,
+            character_image_url=character.image_url,
             text="",
         )
 
@@ -874,6 +877,7 @@ class WebSocketManager:
             "data": {
                 "character_id": character.id,
                 "character_name": character.name,
+                "character_image_url": character.image_url,
                 "message_id": message_id,
             },
         })
@@ -896,6 +900,7 @@ class WebSocketManager:
                 "text": text,
                 "character_id": character.id,
                 "character_name": character.name,
+                "character_image_url": character.image_url,
                 "message_id": message_id,
             },
         })
@@ -920,6 +925,7 @@ class WebSocketManager:
             "data": {
                 "character_id": character.id,
                 "character_name": character.name,
+                "character_image_url": character.image_url,
                 "message_id": message_id,
                 "text": text,
                 "interrupted": interrupted,
@@ -951,6 +957,19 @@ class WebSocketManager:
             },
         })
 
+    @staticmethod
+    def _build_model_settings(data: Dict[str, Any]) -> ModelSettings:
+        return ModelSettings(
+            model=str(data.get("model", "openai/gpt-oss-120b")),
+            temperature=float(data.get("temperature", 0.93)),
+            top_p=float(data.get("top_p", 0.95)),
+            min_p=float(data.get("min_p", 0.0)),
+            top_k=int(data.get("top_k", 40)),
+            frequency_penalty=float(data.get("frequency_penalty", 0.0)),
+            presence_penalty=float(data.get("presence_penalty", 0.0)),
+            repetition_penalty=float(data.get("repetition_penalty", 1.0)),
+        )
+
     # ------ WebSocket message handling ------ #
 
     async def handle_text_message(self, raw: str):
@@ -967,6 +986,16 @@ class WebSocketManager:
             await self.send_text_to_client({"type": "pong"})
 
         elif message_type == "user_message":
+            model_settings_payload = data.get("model_settings")
+            if isinstance(model_settings_payload, dict):
+                try:
+                    model_settings = self._build_model_settings(model_settings_payload)
+                except (TypeError, ValueError):
+                    logger.warning("Invalid inline model settings payload")
+                else:
+                    if self.chat:
+                        await self.chat.set_model_settings(model_settings)
+
             text = data.get("text", "").strip()
             if text:
                 await self.handle_user_message(text)
@@ -982,16 +1011,12 @@ class WebSocketManager:
                 await self.set_stt_state("inactive")
 
         elif message_type == "model_settings":
-            model_settings = ModelSettings(
-                model=data.get("model", "openai/gpt-oss-120b"),
-                temperature=float(data.get("temperature", 0.93)),
-                top_p=float(data.get("top_p", 0.95)),
-                min_p=float(data.get("min_p", 0.0)),
-                top_k=int(data.get("top_k", 40)),
-                frequency_penalty=float(data.get("frequency_penalty", 0.0)),
-                presence_penalty=float(data.get("presence_penalty", 0.0)),
-                repetition_penalty=float(data.get("repetition_penalty", 1.0)),
-            )
+            try:
+                model_settings = self._build_model_settings(data)
+            except (TypeError, ValueError):
+                logger.warning("Invalid model settings payload")
+                return
+
             if self.chat:
                 await self.chat.set_model_settings(model_settings)
             logger.info(f"Model settings updated: {model_settings.model}")
@@ -1088,3 +1113,4 @@ app.mount("/", StaticFiles(directory="client", html=True), name="client")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5173)
+
