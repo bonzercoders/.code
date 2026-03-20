@@ -28,11 +28,14 @@ Single-user application. Do not over-engineer for enterprise scale or multi-tena
 │       │   ├── characters
 │       │   │   ├── CharacterDirectory.tsx
 │       │   │   └── CharacterEditor.tsx
+│       │   ├── drawer
+│       │   │   └── HomeInfoDrawer.tsx
 │       │   ├── editor
 │       │   │   └── ChatEditor.tsx
 │       │   ├── layout
 │       │   │   ├── AppLayout.tsx
 │       │   │   └── PageCanvas.tsx
+│       │   ├── registry
 │       │   ├── ui
 │       │   └── voices
 │       │       ├── VoiceDirectory.tsx
