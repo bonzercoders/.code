@@ -44,7 +44,6 @@ Single-user application. Do not over-engineer for enterprise scale or multi-tena
 │       │   │   └── voices.ts
 │       │   ├── characters.ts
 │       │   ├── navigation.ts
-│       │   ├── useVoiceSocket.ts
 │       │   ├── utils.ts
 │       │   ├── voices.ts
 │       │   └── websocket.ts

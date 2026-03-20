@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react"
+
 export type ConnectionStatus = "connecting" | "connected" | "disconnected"
 
 export type TextMessageHandler = (data: Record<string, unknown>) => void
@@ -103,4 +105,34 @@ export class VoiceSocket {
 export function getWebSocketUrl(path = "/ws"): string {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
   return `${protocol}//${window.location.hostname}:8000${path}`
+}
+
+interface UseVoiceSocketOptions {
+  onText?: (data: Record<string, unknown>) => void
+  onBinary?: (data: ArrayBuffer) => void
+}
+
+export function useVoiceSocket(options: UseVoiceSocketOptions = {}) {
+  const [status, setStatus] = useState<ConnectionStatus>("disconnected")
+  const socketRef = useRef<VoiceSocket | null>(null)
+  const handlersRef = useRef(options)
+  handlersRef.current = options
+
+  useEffect(() => {
+    const socket = new VoiceSocket({
+      url: getWebSocketUrl(),
+      onText: (data) => handlersRef.current.onText?.(data),
+      onBinary: (data) => handlersRef.current.onBinary?.(data),
+      onStatusChange: setStatus,
+    })
+
+    socketRef.current = socket
+
+    return () => {
+      socket.disconnect()
+      socketRef.current = null
+    }
+  }, [])
+
+  return { status, socket: socketRef }
 }

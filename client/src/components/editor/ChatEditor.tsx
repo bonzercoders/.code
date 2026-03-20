@@ -3,7 +3,7 @@ import { Plus } from "lucide-react"
 
 import micIcon from "@/assets/mic.png"
 import { Button } from "@/components/ui/button"
-import { useVoiceSocket } from "@/lib/useVoiceSocket"
+import { useVoiceSocket } from "@/lib/websocket"
 
 const MENU_ITEMS = ["File upload", "New chat"]
 
