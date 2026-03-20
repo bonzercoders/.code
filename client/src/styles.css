@@ -153,14 +153,14 @@
   display: flex;
   height: 100%;
   min-height: 0;
-  gap: 8px;
+  gap: 0px;
 }
 
 .app-sidebar {
-  width: 256px;
+  width: 195px;
   height: 100%;
-  border: 1px solid #191d20;
-  border-radius: 16px;
+  border: 0px solid #191d20;
+  border-radius: 0px;
   background: #090b0c;
   flex-shrink: 0;
   overflow: hidden;
@@ -211,6 +211,7 @@
   opacity: 1;
   transform: translateX(0);
   transition: opacity 180ms ease, transform 220ms ease;
+  display: none;
 }
 
 .app-sidebar.is-collapsed .sidebar__header {
@@ -300,8 +301,8 @@
 }
 
 .sidebar-nav__icon {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
   flex-shrink: 0;
 }
@@ -345,10 +346,11 @@
   color: #f4f8ff;
   font-weight: 600;
   white-space: nowrap;
+  display: none;
 }
 
 .sidebar-footer__subline {
-  font-size: 0.72rem;
+  font-size: 0.88rem;
   line-height: 1.15;
   color: #91a2b7;
   white-space: nowrap;
@@ -395,8 +397,8 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
-  border: 1px solid #191d20;
-  border-radius: 16px;
+  border: 0px solid #191d20;
+  border-radius: 0px;
   background: #090b0c;
   padding: 30px 30px 12px;
   display: flex;
