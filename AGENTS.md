@@ -63,9 +63,9 @@ Single-user application. Do not over-engineer for enterprise scale or multi-tena
 
   **Important Notes:**
   Maintain directory structure, keeping everything modular and organized.
-  Components are either UI (from shadcn or similar) or a page specific component we are building, like a chat editor.
+  Components are either UI (from shadcn or similar) or a specific component we are building, like a chat editor.
   Build component and then add to Page (Home etc.), don't build on Page.
-  Use of lib also modular, organized with feature/functionality in mind i.e. an audio player, database etc.
+  Use of lib directory organized with feature in mind i.e. an audio player, database etc.
 
   **Patching Issue**
   There seems to be an issue with apply_patch in this environment, so switching to direct file writes is the way to go.
