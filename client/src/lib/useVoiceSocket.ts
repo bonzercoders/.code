@@ -7,8 +7,6 @@ interface UseVoiceSocketOptions {
   onBinary?: (data: ArrayBuffer) => void
 }
 
-const noop = () => {}
-
 export function useVoiceSocket(options: UseVoiceSocketOptions = {}) {
   const [status, setStatus] = useState<ConnectionStatus>("disconnected")
   const socketRef = useRef<VoiceSocket | null>(null)
