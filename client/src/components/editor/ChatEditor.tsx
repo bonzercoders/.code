@@ -3,18 +3,21 @@ import { Plus } from "lucide-react"
 
 import micIcon from "@/assets/mic.png"
 import { Button } from "@/components/ui/button"
-import { useVoiceSocket } from "@/lib/websocket"
+import { type ConnectionStatus } from "@/lib/websocket"
 
 const MENU_ITEMS = ["File upload", "New chat"]
 
-const STATUS_LABEL: Record<string, string> = {
+const STATUS_LABEL: Record<ConnectionStatus, string> = {
   connected: "Connected",
   connecting: "Connecting...",
   disconnected: "Disconnected",
 }
 
-export function ChatEditor() {
-  const { status } = useVoiceSocket()
+interface ChatEditorProps {
+  status: ConnectionStatus
+}
+
+export function ChatEditor({ status }: ChatEditorProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
 

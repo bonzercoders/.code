@@ -1,43 +1,65 @@
-import { useState } from "react"
+import { type CSSProperties } from "react"
 
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/registry/slider"
 
-export function Pattern() {
-  const [value, setValue] = useState(50)
+interface ParameterSliderProps {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  onChange: (value: number) => void
+  accent: string
+}
+
+function getStepDecimals(step: number): number {
+  const stepText = String(step)
+  const decimalPart = stepText.includes(".") ? stepText.split(".")[1] : ""
+  return decimalPart.length
+}
+
+function formatValue(value: number, step: number): string {
+  const decimals = getStepDecimals(step)
+
+  if (decimals === 0) {
+    return String(Math.round(value))
+  }
+
+  return value.toFixed(decimals)
+}
+
+export function ParameterSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  accent,
+}: ParameterSliderProps) {
+  const style = {
+    "--llm-slider-accent": accent,
+  } as CSSProperties
 
   return (
-    <div className="mx-auto grid w-full max-w-sm gap-4">
-      <div className="flex items-center justify-between">
-        <Label htmlFor="slider-input" className="text-sm font-medium">
-          Opacity
-        </Label>
-        <div className="flex items-center gap-1.5">
-          <Input
-            id="slider-input"
-            type="number"
-            value={value}
-            onChange={(e) => {
-              const v = Number(e.target.value)
-              if (v >= 0 && v <= 100) setValue(v)
-            }}
-            min={0}
-            max={100}
-            className="h-8 w-16 text-center text-sm tabular-nums"
-          />
-          <span className="text-muted-foreground text-xs">%</span>
-        </div>
+    <div className="llm-parameter-slider" style={style}>
+      <div className="llm-parameter-slider__head">
+        <span className="llm-parameter-slider__label">{label}</span>
+        <span className="llm-parameter-slider__value">{formatValue(value, step)}</span>
       </div>
+
       <Slider
+        className="llm-parameter-slider__control"
+        max={max}
+        min={min}
+        onValueChange={(nextValues) => {
+          const next = nextValues[0]
+          if (typeof next === "number") {
+            onChange(next)
+          }
+        }}
+        step={step}
         value={[value]}
-        onValueChange={(val) =>
-          setValue(
-            Array.isArray(val) ? ((val[0] as number) ?? 50) : (val as number)
-          )
-        }
-        max={100}
-        step={1}
       />
     </div>
   )
