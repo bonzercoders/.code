@@ -1,6 +1,6 @@
 import { useState } from "react"
 
-import { HomeInfoDrawer } from "@/components/home/HomeInfoDrawer"
+import { HomeInfoDrawer } from "@/components/drawer/HomeInfoDrawer"
 import { ChatEditor } from "@/components/editor/ChatEditor"
 
 export function HomePage() {
