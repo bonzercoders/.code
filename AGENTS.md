@@ -45,6 +45,7 @@ Single-user application. Do not over-engineer for enterprise scale or multi-tena
 │       │   │   ├── characters.ts
 │       │   │   ├── client.ts
 │       │   │   └── voices.ts
+│       │   ├── audio-player.ts
 │       │   ├── characters.ts
 │       │   ├── chat-messages.ts
 │       │   ├── navigation.ts

@@ -960,7 +960,7 @@
   gap: 8px;
 }
 
-.chat-editor__icon-button--mic {
+.voice-button {
   border-radius: 999px;
   border-color: rgba(255, 255, 255, 0.14);
 }
