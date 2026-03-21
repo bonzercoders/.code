@@ -109,7 +109,7 @@ class TTS:
                 chunk_index = 0
 
                 try:
-                    async for pcm_bytes in self.synthesize_speech(sentence.text, sentence.voice_id, sentence):
+                    async for pcm_bytes in self.synthesize_speech(sentence.text, sentence.voice_id):
                         await self.queues.tts_queue.put(
                             AudioChunk(
                                 audio_bytes=pcm_bytes,
