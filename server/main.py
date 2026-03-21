@@ -511,8 +511,6 @@ class ChatLLM:
         if self.is_turn_cancelled and self.is_turn_cancelled(turn_id):
             return response
 
-        self.save_conversation_context(messages, character, model_settings)
-
         try:
             stream = await self.client.chat.completions.create(
                 model=model_settings.model,
