@@ -46,7 +46,9 @@ Single-user application. Do not over-engineer for enterprise scale or multi-tena
 │       │   │   ├── client.ts
 │       │   │   └── voices.ts
 │       │   ├── characters.ts
+│       │   ├── chat-messages.ts
 │       │   ├── navigation.ts
+│       │   ├── openrouter-models.ts
 │       │   ├── utils.ts
 │       │   ├── voices.ts
 │       │   └── websocket.ts
