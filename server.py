@@ -260,9 +260,9 @@ class STT:
 class LLM:
 
     def __init__(self, queues: PipeQueues, api_key: str, db: RealtimeSync,
-                 on_text_stream_start: Optional[Callable[["Character", str, str], Awaitable[None]]] = None,
-                 on_text_stream_stop: Optional[Callable[["Character", str, str, str, bool], Awaitable[None]]] = None,
-                 on_text_chunk: Optional[Callable[[str, "Character", str, str], Awaitable[None]]] = None):
+                 on_text_stream_start: Optional[Callable[["Character", str], Awaitable[None]]] = None,
+                 on_text_stream_stop: Optional[Callable[["Character", str, str], Awaitable[None]]] = None,
+                 on_text_chunk: Optional[Callable[[str, "Character", str], Awaitable[None]]] = None):
 
         self.conversation_history: List[Dict] = []
         self.conversation_id: Optional[str] = None
@@ -337,12 +337,17 @@ class LLM:
         while True:
             try:
                 payload = await self.queues.stt_queue.get()
-                user_message: str = ""
-                if isinstance(payload, tuple) and len(payload) == 2:
+                user_message = ""
+
+                if isinstance(payload, str):
                     user_message = payload
-                elif isinstance(payload, str):
-                    user_message = payload
-                if user_message and user_message.strip():
+                elif isinstance(payload, tuple):
+                    if len(payload) == 2 and isinstance(payload[1], str):
+                        user_message = payload[1]
+                    elif len(payload) == 1 and isinstance(payload[0], str):
+                        user_message = payload[0]
+
+                if user_message.strip():
                     await self.user_turn(user_message)
             except asyncio.CancelledError:
                 break
@@ -434,8 +439,8 @@ class LLM:
 
     async def initiate_character_response(self,
                                           character: Character,
-                                          on_text_stream_start: Optional[Callable[[Character, str, str], Awaitable[None]]] = None,
-                                          on_text_stream_stop: Optional[Callable[[Character, str, str, str, bool], Awaitable[None]]] = None) -> Optional[str]:
+                                          on_text_stream_start: Optional[Callable[[Character, str], Awaitable[None]]] = None,
+                                          on_text_stream_stop: Optional[Callable[[Character, str, str], Awaitable[None]]] = None) -> Optional[str]:
 
         model_settings = await self.get_model_settings()
         message_id = str(uuid.uuid4())
@@ -464,7 +469,7 @@ class LLM:
                                         character: Character,
                                         message_id: str,
                                         model_settings: ModelSettings,
-                                        on_text_chunk: Optional[Callable[[str, Character, str, str], Awaitable[None]]] = None) -> str:
+                                        on_text_chunk: Optional[Callable[[str, Character, str], Awaitable[None]]] = None) -> str:
         """Stream LLM tokens, split into sentences, push TTSSentence items to sentence_queue."""
 
         sentence_index = 0
@@ -551,7 +556,7 @@ class ChatSession:
         self._task_stream_audio: Optional[asyncio.Task] = None
 
         self.user_name = "Jay"
-        self.active_audio_stream: Optional[AudioChunk] = None
+        self.current_message_id: Optional[str] = None
         self.stt_state: str = "inactive"
 
     async def initialize(self, db: RealtimeSync):
@@ -593,7 +598,7 @@ class ChatSession:
         """Stop everything cleanly on WebSocket close."""
 
         self.websocket = None
-        self.active_audio_stream = None
+        self.current_message_id = None
 
     async def shutdown(self):
         await self.disconnect()
@@ -625,14 +630,16 @@ class ChatSession:
                 item = await self.queues.tts_queue.get()
                 try:
                     if isinstance(item, AudioResponseDone):
-                        
-                        await self.on_audio_stream_stop(self.active_audio_stream)
+                        if self.current_message_id == item.message_id:
+                            await self.on_audio_stream_stop(item.character_id, item.character_name, item.message_id)
+                            self.current_message_id = None
+                        continue
 
                     chunk: AudioChunk = item
 
-                    await self.on_audio_stream_start(chunk)
-
-                    self.active_audio_stream = chunk
+                    if self.current_message_id != chunk.message_id:
+                        await self.on_audio_stream_start(chunk)
+                        self.current_message_id = chunk.message_id
 
                     if self.websocket:
                         await self.websocket.send_bytes(chunk.audio_bytes)
@@ -649,7 +656,7 @@ class ChatSession:
         await self.send_text_to_client({"type": "stt_stabilized", "text": text})
 
     async def on_transcription_final(self, user_message: str):
-        await self.queues.stt_queue.put((user_message))
+        await self.queues.stt_queue.put(user_message)
         await self.send_text_to_client({"type": "stt_final", "text": user_message})
         await self.set_stt_state("listening")
 
@@ -718,14 +725,14 @@ class ChatSession:
             },
         })
 
-    async def on_audio_stream_stop(self, chunk: AudioChunk):
-        logger.info(f"[TTS] Emitting audio_stream_stop for {chunk.character_id}/{chunk.message_id}")
+    async def on_audio_stream_stop(self, character_id: str, character_name: str, message_id: str):
+        logger.info(f"[TTS] Emitting audio_stream_stop for {character_id}/{message_id}")
         await self.send_text_to_client({
             "type": "audio_stream_stop",
             "data": {
-                "character_id": chunk.character_id,
-                "character_name": chunk.character_name,
-                "message_id": chunk.message_id,
+                "character_id": character_id,
+                "character_name": character_name,
+                "message_id": message_id,
             },
         })
 
@@ -765,8 +772,8 @@ class ChatSession:
                     logger.warning("Invalid inline model settings payload")
 
                 else:
-                    if self.chat:
-                        await self.chat.set_model_settings(model_settings)
+                    if self.llm:
+                        await self.llm.set_model_settings(model_settings)
 
             text = data.get("text", "").strip()
 
@@ -813,7 +820,7 @@ class ChatSession:
     async def handle_user_message(self, user_message: str):
         """User Message Text."""
 
-        await self.queues.stt_queue.put((user_message))
+        await self.queues.stt_queue.put(user_message)
 
     async def send_text_to_client(self, data: dict):
         """Send JSON message to client."""
