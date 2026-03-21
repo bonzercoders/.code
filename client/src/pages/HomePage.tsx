@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { HomeInfoDrawer } from "@/components/drawer/HomeInfoDrawer"
 import { ChatEditor } from "@/components/editor/ChatEditor"
 import { ChatMessageList } from "@/components/editor/ChatMessageList"
+import { AudioPlayer } from "@/lib/audio-player"
 import {
   appendAssistantChunk,
   appendUserMessage,
@@ -31,6 +32,10 @@ function readBoolean(value: unknown): boolean {
   return typeof value === "boolean" ? value : false
 }
 
+function readNumber(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback
+}
+
 export function HomePage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [settings, setSettings] = useState<LlmSettings>(() => loadSettings())
@@ -38,9 +43,69 @@ export function HomePage() {
   const [draftText, setDraftText] = useState("")
 
   const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const audioPlayerRef = useRef<AudioPlayer | null>(null)
+
+  useEffect(() => {
+    const player = new AudioPlayer()
+    audioPlayerRef.current = player
+
+    return () => {
+      player.destroy()
+
+      if (audioPlayerRef.current === player) {
+        audioPlayerRef.current = null
+      }
+    }
+  }, [])
 
   const handleSocketText = useCallback((payload: Record<string, unknown>) => {
     const eventType = readString(payload.type)
+
+    if (eventType === "audio_stream_start") {
+      const data = readRecord(payload.data)
+      if (!data) {
+        return
+      }
+
+      const characterId = readString(data.character_id)
+      const characterName = readString(data.character_name)
+      const messageId = readString(data.message_id)
+      const sampleRate = readNumber(data.sample_rate, 24000)
+
+      if (!characterId || !messageId) {
+        return
+      }
+
+      audioPlayerRef.current?.handleStreamStart({
+        character_id: characterId,
+        character_name: characterName,
+        message_id: messageId,
+        sample_rate: sampleRate > 0 ? sampleRate : 24000,
+      })
+
+      return
+    }
+
+    if (eventType === "audio_stream_stop") {
+      const data = readRecord(payload.data)
+      if (!data) {
+        return
+      }
+
+      const characterId = readString(data.character_id)
+      const messageId = readString(data.message_id)
+
+      if (!characterId || !messageId) {
+        return
+      }
+
+      audioPlayerRef.current?.handleStreamStop({
+        character_id: characterId,
+        message_id: messageId,
+      })
+
+      return
+    }
 
     if (eventType === "text_stream_start") {
       const data = readRecord(payload.data)
@@ -110,7 +175,18 @@ export function HomePage() {
     }
   }, [])
 
-  const { status, socket } = useVoiceSocket({ onText: handleSocketText })
+  const { status, socket } = useVoiceSocket({
+    onText: handleSocketText,
+    onBinary: (buffer) => audioPlayerRef.current?.handleAudioChunk(buffer),
+  })
+
+  useEffect(() => {
+    if (status === "connected") {
+      return
+    }
+
+    audioPlayerRef.current?.stopAll()
+  }, [status])
 
   const handleSettingsChange = useCallback((partial: Partial<LlmSettings>) => {
     setSettings((previous) => {
@@ -131,6 +207,8 @@ export function HomePage() {
     }
 
     setMessages((previous) => appendUserMessage(previous, text))
+
+    void audioPlayerRef.current?.unlock()
 
     socket.current?.sendText({
       type: "user_message",

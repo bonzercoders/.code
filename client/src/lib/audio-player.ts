@@ -18,6 +18,22 @@ export class AudioPlayer {
   onSpeakerChange?: (characterId: string | null, characterName: string | null) => void
   onSessionPlaybackComplete?: (characterId: string, messageId: string) => void
 
+  async unlock(): Promise<void> {
+    this.ensureContext()
+
+    if (!this.context) {
+      return
+    }
+
+    if (this.context.state !== "running") {
+      try {
+        await this.context.resume()
+      } catch {
+        // Resume may fail until a user gesture; stream data can queue in the meantime.
+      }
+    }
+  }
+
   handleStreamStart(data: {
     character_id: string
     character_name: string
@@ -98,7 +114,7 @@ export class AudioPlayer {
     this.onSpeakerChange?.(null, null)
 
     if (this.context) {
-      if (this.context.state === 'suspended') {
+      if (this.context.state === "suspended") {
         void this.context.resume()
       }
       this.nextPlayTime = this.context.currentTime + 0.05
@@ -120,7 +136,9 @@ export class AudioPlayer {
 
   private ensureContext(): void {
     if (this.context) {
-      if (this.context.state === 'suspended') void this.context.resume()
+      if (this.context.state === "suspended") {
+        void this.context.resume()
+      }
       return
     }
 
@@ -131,6 +149,10 @@ export class AudioPlayer {
   private scheduleChunk(buffer: ArrayBuffer, sampleRate: number): void {
     const ctx = this.context
     if (!ctx) return
+
+    if (buffer.byteLength < 2 || buffer.byteLength % 2 !== 0) {
+      return
+    }
 
     const int16 = new Int16Array(buffer)
     if (int16.length === 0) return
