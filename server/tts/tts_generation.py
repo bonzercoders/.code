@@ -15,14 +15,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from server.db.realtime import RealtimeSync
 
-
 logger = logging.getLogger(__name__)
 
 @dataclass
 class TTSSentence:
     text: str
     index: int
-    turn_id: str
     message_id: str
     character_id: str
     character_name: str
@@ -30,7 +28,6 @@ class TTSSentence:
 
 @dataclass
 class AudioResponseDone:
-    turn_id: str
     message_id: str
     character_id: str
     character_name: str
@@ -40,7 +37,6 @@ class AudioChunk:
     audio_bytes: bytes
     sentence_index: int
     chunk_index: int
-    turn_id: str
     message_id: str
     character_id: str
     character_name: str
@@ -63,11 +59,10 @@ def revert_delay_pattern(data: torch.Tensor, start_idx: int = 0) -> torch.Tensor
     return torch.cat(out, dim=0)
 
 class TTS:
-    def __init__(self, queues: TTSQueues, db: "RealtimeSync", is_turn_cancelled: Optional[Callable[[str], bool]] = None):
+    def __init__(self, queues: TTSQueues, db: "RealtimeSync"):
         self.queues = queues
         self.db = db
         self._task_tts_worker: Optional[asyncio.Task] = None
-        self.is_turn_cancelled = is_turn_cancelled
 
         # Set during initialize()
         self.engine: Optional[HiggsAudioServeEngine] = None
@@ -102,34 +97,24 @@ class TTS:
             try:
                 if isinstance(item, AudioResponseDone):
                     if self.engine is not None:
-                        self.engine.clear_generated_audio_ids(item.turn_id)
+                        self.engine.clear_generated_audio_ids(item)
 
-                    if self.is_turn_cancelled and self.is_turn_cancelled(item.turn_id):
-                        logger.info(f"[TTS] Dropping completion sentinel for cancelled turn {item.turn_id}")
-                        continue
                     await self.queues.tts_queue.put(item)
                     logger.info(f"[TTS] End of response for {item.character_name}")
                     continue
 
                 sentence: TTSSentence = item
-                if self.is_turn_cancelled and self.is_turn_cancelled(sentence.turn_id):
-                    logger.info(f"[TTS] Dropping sentence {sentence.index} for cancelled turn {sentence.turn_id}")
-                    continue
 
                 logger.info(f"[TTS] Generating audio for sentence {sentence.index}")
                 chunk_index = 0
 
                 try:
-                    async for pcm_bytes in self.synthesize_speech(sentence.text, sentence.voice_id, sentence.turn_id):
-                        if self.is_turn_cancelled and self.is_turn_cancelled(sentence.turn_id):
-                            logger.info(f"[TTS] Stopping synthesis for cancelled turn {sentence.turn_id}")
-                            break
+                    async for pcm_bytes in self.synthesize_speech(sentence.text, sentence.voice_id, sentence):
                         await self.queues.tts_queue.put(
                             AudioChunk(
                                 audio_bytes=pcm_bytes,
                                 sentence_index=sentence.index,
                                 chunk_index=chunk_index,
-                                turn_id=sentence.turn_id,
                                 message_id=sentence.message_id,
                                 character_id=sentence.character_id,
                                 character_name=sentence.character_name,
@@ -186,12 +171,10 @@ class TTS:
 
         return messages
 
-    async def synthesize_speech(self, text: str, voice_id: str, turn_id: str) -> AsyncGenerator[bytes, None]:
+    async def synthesize_speech(self, text: str, voice_id: str) -> AsyncGenerator[bytes, None]:
         """Stream PCM16 audio chunks from Higgs Audio engine."""
         if not voice_id:
             raise ValueError("Cannot synthesize speech without voice_id")
-        if self.is_turn_cancelled and self.is_turn_cancelled(turn_id):
-            return
 
         selected_voice = self.db.get_voice(voice_id)
         if not selected_voice:
@@ -199,7 +182,7 @@ class TTS:
         messages = await self.load_voice_reference(selected_voice)
         messages.append(Message(role="user", content=text))
 
-        chat_sample = ChatMLSample(messages=messages, misc={"turn_id": turn_id, "stream_id": turn_id})
+        chat_sample = ChatMLSample(messages=messages)
 
         # Initialize streaming state
         audio_tokens: list[torch.Tensor] = []
@@ -216,10 +199,7 @@ class TTS:
                 ras_win_len=7,
                 ras_win_max_num_repeat=2,
                 force_audio_gen=True,
-                stream_id=turn_id,
             ):
-                if self.is_turn_cancelled and self.is_turn_cancelled(turn_id):
-                    break
 
                 if delta.audio_tokens is None:
                     continue
@@ -265,8 +245,6 @@ class TTS:
 
         # Flush remaining tokens
         if seq_len > 0 and seq_len % self.chunk_size != 0 and audio_tokens:
-            if self.is_turn_cancelled and self.is_turn_cancelled(turn_id):
-                return
             audio_tensor = torch.cat(audio_tokens, dim=-1)
             remaining = seq_len % self.chunk_size
 
