@@ -597,6 +597,10 @@ class ChatSession:
     async def disconnect(self):
         """Stop everything cleanly on WebSocket close."""
 
+        if self.stt and self.stt.is_listening:
+            self.stt.stop_listening()
+
+        self.stt_state = "inactive"
         self.websocket = None
         self.current_message_id = None
 

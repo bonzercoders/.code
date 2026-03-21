@@ -13,7 +13,7 @@ type STTAudioCaptureState = {
   error: string | null
 }
 
-const DEFAULT_WORKLET_MODULE = '/worklets/stt-capture-processor.js'
+const DEFAULT_WORKLET_MODULE = '/worklet/stt-capture-processor.js'
 const DEFAULT_TARGET_SAMPLE_RATE = 16000
 const DEFAULT_FRAME_DURATION_MS = 20
 
@@ -155,17 +155,7 @@ export class STTAudioCapture {
   }
 
   private async loadWorkletModule(context: AudioContext): Promise<void> {
-    try {
-      await context.audioWorklet.addModule(this.workletModulePath)
-      return
-    } catch (primaryError) {
-      if (!this.workletModulePath.startsWith('/worklets/')) {
-        throw primaryError
-      }
-    }
-
-    const fallbackPath = `/public${this.workletModulePath}`
-    await context.audioWorklet.addModule(fallbackPath)
+    await context.audioWorklet.addModule(this.workletModulePath)
   }
 
   private teardownGraph(): void {

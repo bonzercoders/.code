@@ -4,8 +4,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import type { ChatMessage } from "@/lib/chat-messages"
 import { cn } from "@/lib/utils"
 
+export interface LiveUserTranscription {
+  stableText: string
+  unstableText: string
+}
+
 interface ChatMessageListProps {
   messages: ChatMessage[]
+  liveUserTranscription?: LiveUserTranscription | null
 }
 
 function getInitials(name: string): string {
@@ -21,7 +27,7 @@ function getInitials(name: string): string {
     .join("")
 }
 
-export function ChatMessageList({ messages }: ChatMessageListProps) {
+export function ChatMessageList({ messages, liveUserTranscription }: ChatMessageListProps) {
   const listRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -30,7 +36,11 @@ export function ChatMessageList({ messages }: ChatMessageListProps) {
     }
 
     listRef.current.scrollTop = listRef.current.scrollHeight
-  }, [messages])
+  }, [messages, liveUserTranscription])
+
+  const hasLiveTranscript =
+    !!liveUserTranscription &&
+    (liveUserTranscription.stableText.length > 0 || liveUserTranscription.unstableText.length > 0)
 
   return (
     <section aria-label="Chat messages" className="chat-message-list" ref={listRef}>
@@ -75,6 +85,18 @@ export function ChatMessageList({ messages }: ChatMessageListProps) {
           </article>
         )
       })}
+
+      {hasLiveTranscript ? (
+        <article className="chat-message chat-message--user chat-message--live">
+          <div className="chat-message__bubble chat-message__bubble--user">
+            <p className="chat-message__text">
+              <span>{liveUserTranscription.stableText}</span>
+              <span className="chat-message__text-unstable">{liveUserTranscription.unstableText}</span>
+              <span className="chat-message__cursor" />
+            </p>
+          </div>
+        </article>
+      ) : null}
     </section>
   )
 }
